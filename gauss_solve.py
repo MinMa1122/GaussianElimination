@@ -107,7 +107,8 @@ if __name__ == "__main__":
     for row in L:
         print(row)
     print("U (Upper Triangular Matrix):")
-    for row in U
+    for row in U:
+        print(row)
 
     # Test Python LU decomposition (No Permutation)
     A = [[2.0, 3.0, -1.0],
@@ -119,7 +120,8 @@ if __name__ == "__main__":
     for row in L:
         print(row)
     print("U (Upper Triangular Matrix):")
-    for row in U
+    for row in U:
+        print(row)
 
     # Test C-based LU decomposition (which does not support P)
     use_c = True
@@ -131,6 +133,7 @@ if __name__ == "__main__":
         for row in L:
             print(row)
         print("U (Upper Triangular Matrix):")
-        for row in U
+        for row in U:
+            print(row)
     except NoImplementationInC as e:
         print(e)
