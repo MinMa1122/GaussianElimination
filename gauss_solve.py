@@ -52,6 +52,47 @@ def lu_python(A):
 
     return unpack(A)
 
+def plu_c(A):
+    """C-based PA=LU decomposition using partial pivoting."""
+    try:
+        lib = ctypes.CDLL(gauss_library_path)
+    except OSError:
+        raise NoImplementationInC("C library not found or not implemented for PA=LU.")
+
+    n = len(A)
+    A = np.array(A, dtype=float)
+    P = np.arange(n).tolist()  # Permutation vector initialized to [0, 1, 2, ..., n-1]
+
+    # Perform partial pivoting in Python
+    for k in range(n):
+        max_index = np.argmax(abs(A[k:n, k])) + k
+        if A[max_index, k] == 0:
+            raise ValueError("Matrix is singular and cannot be decomposed.")
+        
+        # Swap rows in A and update permutation vector P
+        if k != max_index:
+            A[[k, max_index], :] = A[[max_index, k], :]
+            P[k], P[max_index] = P[max_index], P[k]  # Record the swap in P
+
+    # After applying pivoting, send A to the C function for LU decomposition
+    flat_array_2d = [item for row in A for item in row]
+    c_array_2d = (ctypes.c_double * len(flat_array_2d))(*flat_array_2d)
+
+    # Define the C function signature and call it
+    lib.lu_in_place.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_double))
+    lib.lu_in_place(n, c_array_2d)
+
+    # Convert back to a 2D Python list after LU decomposition
+    modified_array_2d = [
+        [c_array_2d[i * n + j] for j in range(n)]
+        for i in range(n)
+    ]
+
+    # Extract L and U from the modified array
+    L, U = unpack(modified_array_2d)
+
+    return P, L, U
+
 def plu_python(A):
     """Python-based PA=LU decomposition."""
     n = len(A)
@@ -82,16 +123,17 @@ def plu_python(A):
 
 def plu(A, use_c=False):
     if use_c:
-        return lu_c(A)  # Call C-based LU decomposition (without PA support)
+        return plu_c(A)  # Call C-based LU decomposition with PA support
     else:
         return plu_python(A)  # Call Python-based PA=LU decomposition
 
 def lu(A, use_c=False):
     if use_c:
-        return lu_c(A)[1:]  # Use C LU decomposition and return only L and U (no P)
+        return lu_c(A)  # Call C-based LU decomposition
     else:
         return lu_python(A)  # Call Python LU decomposition
 
+'''
 if __name__ == "__main__":
 
     A = [[2.0, 3.0, -1.0],
@@ -137,3 +179,4 @@ if __name__ == "__main__":
             print(row)
     except NoImplementationInC as e:
         print(e)
+'''
