@@ -36,7 +36,7 @@ def lu_c(A):
 
     L, U = unpack(modified_array_2d)
     P = list(range(n))  # Default identity permutation
-    return P, L, U
+    return L, U
 
 def lu_python(A):
     """Python-based LU decomposition (no P)."""
