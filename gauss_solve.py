@@ -1,10 +1,11 @@
 import numpy as np
 import ctypes
 
+# Exception when C code is not available
 class NoImplementationInC(Exception):
-    """Exception raised when C code is not implemented."""
     pass
 
+# Path to the C shared library
 gauss_library_path = './libgauss.so'
 
 def unpack(A):
@@ -16,43 +17,46 @@ def unpack(A):
 
 def lu_c(A):
     """C-based LU decomposition (assumed only supports LU, no P)."""
-    # Load the shared library
     try:
         lib = ctypes.CDLL(gauss_library_path)
     except OSError:
         raise NoImplementationInC("C library not found or not implemented for PA=LU.")
     
-    # Create a 2D array in Python and flatten it
     n = len(A)
     flat_array_2d = [item for row in A for item in row]
-
-    # Convert to a ctypes array
     c_array_2d = (ctypes.c_double * len(flat_array_2d))(*flat_array_2d)
 
-    # Define the function signature for the C function
     lib.lu_in_place.argtypes = (ctypes.c_int, ctypes.POINTER(ctypes.c_double))
-
-    # Call the C function to perform LU decomposition in place
     lib.lu_in_place(n, c_array_2d)
 
-    # Convert back to a 2D Python list of lists
     modified_array_2d = [
         [c_array_2d[i * n + j] for j in range(n)]
         for i in range(n)
     ]
 
-    # Extract L and U from the modified array
     L, U = unpack(modified_array_2d)
-
-    # Since C implementation does not support PA=LU, return a default P (identity permutation)
-    P = list(range(n))
+    P = list(range(n))  # Default identity permutation
     return P, L, U
 
+def lu_python(A):
+    """Python-based LU decomposition (no P)."""
+    n = len(A)
+    for k in range(n):
+        for i in range(k, n):
+            for j in range(k):
+                A[k][i] -= A[k][j] * A[j][i]
+        for i in range(k+1, n):
+            for j in range(k):
+                A[i][k] -= A[i][j] * A[j][k]
+            A[i][k] /= A[k][k]
+
+    return unpack(A)
+
 def plu_python(A):
-    """Perform PA=LU decomposition using Python."""
+    """Python-based PA=LU decomposition."""
     n = len(A)
     A = np.array(A, dtype=float)  # Ensure A is a NumPy array to modify it in place
-    P = np.arange(n)  # Permutation vector initialized to [0, 1, 2, ..., n-1]
+    P = np.arange(n).tolist()  # Permutation vector initialized to [0, 1, 2, ..., n-1]
 
     for k in range(n):
         # Partial pivoting: find the row with the largest element in column k
@@ -62,8 +66,8 @@ def plu_python(A):
         
         # Swap rows in A and update permutation vector P
         if k != max_index:
-            A[[k, max_index], :] = A[[max_index, k], :]  # Swap rows in A
-            P[[k, max_index]] = P[[max_index, k]]  # Record the swap in permutation vector
+            A[[k, max_index], :] = A[[max_index, k], :]
+            P[k], P[max_index] = P[max_index], P[k]  # Swap elements in P
 
         # Perform the LU decomposition step
         for i in range(k+1, n):
@@ -74,51 +78,59 @@ def plu_python(A):
     L = np.tril(A, -1) + np.eye(n)  # L is the lower triangular part with 1s on the diagonal
     U = np.triu(A)  # U is the upper triangular part
 
-    # Permutation matrix P is a list of row swaps
-    P_matrix = np.eye(n)[P]
-
-    return P_matrix.tolist(), L.tolist(), U.tolist()
+    return P, L.tolist(), U.tolist()
 
 def plu(A, use_c=False):
- 
     if use_c:
-        # Try using C implementation (with no P support for now)
-        return lu_c(A)
+        return lu_c(A)  # Call C-based LU decomposition (without PA support)
     else:
-        # Use Python implementation of PA=LU
-        return plu_python(A)
+        return plu_python(A)  # Call Python-based PA=LU decomposition
 
-# Example usage of plu function:
+def lu(A, use_c=False):
+    if use_c:
+        return lu_c(A)[1:]  # Use C LU decomposition and return only L and U (no P)
+    else:
+        return lu_python(A)  # Call Python LU decomposition
+
 if __name__ == "__main__":
+
     A = [[2.0, 3.0, -1.0],
          [4.0, 1.0, 2.0],
          [-2.0, 7.0, 2.0]]
 
-    # Using the Python version
+    # Test Python PA=LU decomposition
     use_c = False
     P, L, U = plu(A, use_c=use_c)
-    print("Using Python:")
-    print("P (Permutation Matrix):")
-    for row in P:
-        print(row)
+    print("Using Python PA=LU:")
+    print("P (Permutation Vector):", P)
     print("L (Lower Triangular Matrix):")
     for row in L:
         print(row)
     print("U (Upper Triangular Matrix):")
-    for row in U:
-        print(row)
+    for row in U
 
-    # Using the C version (which will raise an exception if C is unavailable)
+    # Test Python LU decomposition (No Permutation)
+    A = [[2.0, 3.0, -1.0],
+         [4.0, 1.0, 2.0],
+         [-2.0, 7.0, 2.0]]
+    L, U = lu(A, use_c=False)
+    print("\nUsing Python LU:")
+    print("L (Lower Triangular Matrix):")
+    for row in L:
+        print(row)
+    print("U (Upper Triangular Matrix):")
+    for row in U
+
+    # Test C-based LU decomposition (which does not support P)
     use_c = True
     try:
         P, L, U = plu(A, use_c=use_c)
-        print("Using C (with default P):")
-        print("P (Permutation Vector):", P)
+        print("\nUsing C-based LU:")
+        print("P (Permutation Vector):", P)  # Default identity vector
         print("L (Lower Triangular Matrix):")
         for row in L:
             print(row)
         print("U (Upper Triangular Matrix):")
-        for row in U:
-            print(row)
+        for row in U
     except NoImplementationInC as e:
         print(e)
